@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bootstrap Camera Capture</title>
+
+  <!-- OpenCV.js for computer vision -->
+  <script async src="https://docs.opencv.org/4.9.0/opencv.js" onload="onOpenCvReady();"></script>
+
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+    xintegrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+  <style>
+    body {
+      background-color: #f8f9fa;
+    }
+
+    .capture-container {
+      /* We set a max-width to ensure it looks good on larger screens */
+      max-width: 625px;
+      width: 100%;
+    }
+
+    /* Style the video/canvas container to maintain the aspect ratio */
+    .media-wrapper {
+      position: relative;
+      background-color: #e9ecef;
+      width: 100%;
+      padding-top: 127.2%;
+      /* This is the magic ratio: (795 / 625) * 100% */
+      border-radius: 0.375rem;
+      /* Bootstrap's default border-radius */
+      overflow: hidden;
+    }
+
+    .media-wrapper video,
+    .media-wrapper canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Add a pointer cursor to the video to indicate it's clickable */
+    video:hover {
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body class="d-flex align-items-center justify-content-center min-vh-100 p-3">
+
+  <div class="card shadow-sm capture-container">
+    <div class="card-body text-center">
+      <!--h1 class="card-title h3 mb-2">Camera Capture</h1>
+      <p class="card-text text-muted mb-4">Click the video feed to capture an image.</p-->
+
+      <div class="d-grid gap-2 mb-2 mt-4">
+        <button id="cameraButton" class="btn btn-primary btn-lg" disabled>Start Camera</button>
+      </div>
+
+      <!-- Container for video and canvas -->
+      <div class="media-wrapper shadow-inner">
+        <!-- Video element for live feed -->
+        <video id="video" class="d-none" playsinline autoplay muted></video>
+        <!-- Canvas for captured image -->
+        <canvas id="canvas" class="d-none"></canvas>
+        <div id="placeholder"
+          class="d-flex align-items-center justify-content-center h-100 position-absolute w-100 text-muted">
+          Camera is off
+        </div>
+      </div>
+
+      <div class="d-grid gap-2 mb-4 mt-2">
+        <button id="saveToDriveButton" class="btn btn-primary btn-lg">Save to Dive</button>
+      </div>
+
+      <div id="errorMessage" class="alert alert-danger mt-4 d-none" role="alert"></div>
+      <div id="xMessage" class="alert alert-danger mt-2 d-none" role="alert"></div>
+
+      <div class="d-grid gap-2 mb-4 mt-2">
+        <button id="downloadButton" class="btn btn-primary btn-lg">Download Image</button>
+      </div>
+
+      <!-- Button to trigger the collapse -->
+        <div class="d-grid gap-2">
+            <button class="btn btn-primary btn-lg" type="button" data-bs-toggle="collapse" data-bs-target="#settingsCollapse" aria-expanded="false" aria-controls="settingsCollapse">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-gear-fill me-2" viewBox="0 0 16 16">
+                  <path d="M9.405 1.05c-.413-1.4-2.397-1.4-2.81 0l-.1.34a1.464 1.464 0 0 1-2.105.872l-.31-.17c-1.283-.698-2.686.705-1.987 1.987l.169.311a1.464 1.464 0 0 1-.872 2.105l-.34.1c-1.4.413-1.4 2.397 0 2.81l.34.1a1.464 1.464 0 0 1 .872 2.105l-.17.31c-.698 1.283.705 2.686 1.987 1.987l.311-.169a1.464 1.464 0 0 1 2.105.872l.1.34c.413 1.4 2.397 1.4 2.81 0l.1-.34a1.464 1.464 0 0 1 2.105-.872l.31.17c1.283.698 2.686-.705 1.987-1.987l-.169-.311a1.464 1.464 0 0 1 .872-2.105l.34-.1c1.4-.413-1.4-2.397 0-2.81l-.34-.1a1.464 1.464 0 0 1-.872-2.105l.17-.31c.698-1.283-.705-2.686-1.987-1.987l-.311.169a1.464 1.464 0 0 1-2.105-.872l-.1-.34zM8 10.93a2.929 2.929 0 1 1 0-5.86 2.929 2.929 0 0 1 0 5.858z"/>
+                </svg>
+                Manage Settings
+            </button>
+        </div>
+
+      <!-- Collapsible Element -->
+        <div class="collapse mt-4" id="settingsCollapse">
+            <div class="card card-body settings-card">
+                <form id="settingsForm">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="rect_widthV" class="form-label">width (corner rect):25</label>
+                            <input type="text" class="form-control" id="rect_widthV" placeholder="rect_widthV">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="rect_heightV" class="form-label">heigh  (corner rect):25</label>
+                            <input type="text" class="form-control" id="rect_heightV" placeholder="rect_heightV">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="rect_width_height_diffV" class="form-label">width_height_diff  (corner rect):5</label>
+                            <input type="text" class="form-control" id="rect_width_height_diffV" placeholder="rect_width_height_diffV">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="ROWSV" class="form-label">ROWS:22</label>
+                            <input type="text" class="form-control" id="ROWSV" placeholder="ROWSV">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="COLSV" class="form-label">COLS:14</label>
+                            <input type="text" class="form-control" id="COLSV" placeholder="COLSV">
+                        </div>
+                        <div class="col-md-6">
+                            <label for="valShiftRectV" class="form-label">ShiftRectSize (getColor):5</label>
+                            <input type="text" class="form-control" id="valShiftRectV" placeholder="valShiftRectV">
+                        </div>
+                         <div class="col-md-6">
+                            <label for="valTestBlackWhiteV" class="form-label">BlackWhiteTest Size:220</label>
+                            <input type="text" class="form-control" id="valTestBlackWhiteV" placeholder="valTestBlackWhiteV">
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+
+                    <!-- Save Button -->
+                    <div class="d-flex justify-content-end">
+                         <button type="submit" class="btn btn-primary">Save Settings</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <br>
+
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" value="" id="checkboxShowColorVal">
+          <label class="form-check-label" for="flexCheckDefault">
+            Show Color Value
+          </label>
+        </div>
+
+    </div>
+  </div>
+
+  <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" xintegrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+
+
+  <script type="text/javascript">
+
+    //Global Variable
+    let rect_width = 25;//20
+    let rect_height = 25;//20
+    let rect_width_height_diff = 5;//2
+    let ROWS = 22;
+    let COLS = 14;
+    let valShiftRect = 5;
+    let valTestBlackWhite = 220;//maybe 180,190
+    let arTxtItems = [];
+
+    let settingsIds = ['rect_widthV', 'rect_heightV', 'rect_width_height_diffV', 'ROWSV', 'COLSV', 'valShiftRectV', 'valTestBlackWhiteV'];
+
+    function saveSettings(event) {
+      event.preventDefault();
+                
+      let settings = {};
+      settingsIds.forEach(id => {
+        let inputElement = document.getElementById(id);
+          if (inputElement) {
+            settings[id] = inputElement.value;
+          }
+      });
+      localStorage.setItem('appSettings', JSON.stringify(settings));
+      loadSettings();
+      alert("Saved Setting.")
+    }
+
+    function loadSettings() {
+      let savedSettings = localStorage.getItem('appSettings');
+        if (!savedSettings) {
+          let settings0 = {};
+          let arDFValue = {'rect_widthV':25 , 'rect_heightV':25 , 'rect_width_height_diffV':5 , 'ROWSV':22 , 'COLSV':14 , 'valShiftRectV':5 , 'valTestBlackWhiteV':220 };
+          settingsIds.forEach(id => {
+            let inputElement0 = document.getElementById(id);
+            if (inputElement0) {
+              settings0[id] = arDFValue[id];
+            }
+          });
+          localStorage.setItem('appSettings', JSON.stringify(settings0));
+          savedSettings = localStorage.getItem('appSettings');
+        }
+
+        let settings = JSON.parse(savedSettings);
+        let ar2Dsettings = Object.entries(settings);
+        ar2Dsettings.forEach(v => {
+            let inputElement = document.getElementById(v[0]);
+              if (inputElement && settings[v[0]]) {
+                inputElement.value = settings[v[0]];
+              }
+        });
+        rect_width = parseInt( ar2Dsettings[0][1]);//20
+        rect_height = parseInt( ar2Dsettings[1][1]);//20
+        rect_width_height_diff = parseInt( ar2Dsettings[2][1]);//2
+        ROWS = parseInt( ar2Dsettings[3][1]);
+        COLS = parseInt( ar2Dsettings[4][1]);
+        valShiftRect = parseInt( ar2Dsettings[5][1]);
+        valTestBlackWhite = parseInt( ar2Dsettings[6][1]);//maybe 180,190
+
+    }
+
+    let settingsForm = document.getElementById('settingsForm');
+    settingsForm.addEventListener('submit', saveSettings);
+
+    // Event listener for the download button
+    const downloadButton = document.getElementById('downloadButton');
+        downloadButton.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'cropped_image.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        });
+    const saveToDriveButton = document.getElementById('saveToDriveButton');
+        saveToDriveButton.addEventListener('click', () => {
+          saveToDriveButton.disabled = true;
+          saveToDriveButton.innerHTML = "Uploading Data...";
+            if( arTxtItems.length == 0 ){
+              alert("No Data");
+              saveToDriveButton.disabled = false;
+              saveToDriveButton.innerHTML = "Save to Dive";
+            }else{
+              google.script.run
+              .withSuccessHandler( res => {
+                xMessage.textContent = res;
+                xMessage.classList.remove('d-none');
+                saveToDriveButton.disabled = false;
+                saveToDriveButton.innerHTML = "Save to Dive: ok";
+              }).withFailureHandler( res2 => {
+                xMessage.textContent = "Error: "+res2;
+                xMessage.classList.remove('d-none');
+                saveToDriveButton.disabled = false;
+                saveToDriveButton.innerHTML = "Save to Dive: err";
+              }).saveToDrive( arTxtItems );
+            }
+            arTxtItems = [];
+        });
+
+      function onOpenCvReady(){
+        console.log("cv is ready.");
+        cameraButton.disabled = false;
+
+        errorMessage.textContent = "cv ok";
+        errorMessage.classList.remove('d-none');
+
+      }
+
+        // DOM Elements
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const cameraButton = document.getElementById('cameraButton');
+        const errorMessage = document.getElementById('errorMessage');
+        const xMessage = document.getElementById('xMessage');
+        const placeholder = document.getElementById('placeholder');
+        
+        const canvasCtx = canvas.getContext('2d');
+        
+        let stream;
+        // Define specific constraints. Using 'exact' will force this resolution.
+        const constraints = {
+            video: {
+                width: { exact: COLS*30*1.5 },//625 795   14*21         //width: { exact: 14*30*1.5 }
+                height: { exact: ROWS*30*1.5 },                         //height: { exact: 21*30*1.5 }
+                facingMode: 'environment' // Prefer the rear camera
+            }
+        };
+
+        // --- Function to stop the camera stream ---
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            video.classList.add('d-none');
+            cameraButton.textContent = 'Start Camera';
+            stream = null;
+        }
+        
+        // --- Error Handling ---
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('d-none');
+            stopCamera(); // Ensure camera is off if an error occurs
+        }
+
+        // --- Camera Control Button ---
+        cameraButton.addEventListener('click', async () => {
+            arTxtItems = [];
+            saveToDriveButton.innerHTML = "Save to Dive";
+
+            // If the camera is already running, stop it.
+            if (stream && stream.active) {
+                stopCamera();
+                canvas.classList.add('d-none'); // Hide canvas when stopping manually
+                placeholder.classList.remove('d-none');
+                return;
+            }
+
+            try {
+                // Clear previous errors and hide canvas/placeholder
+                errorMessage.classList.add('d-none');
+                canvas.classList.add('d-none');
+                placeholder.classList.add('d-none');
+
+                // Get camera stream
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                
+                // Show the video element once it's ready to play
+                video.oncanplay = () => {
+                    video.classList.remove('d-none');
+                    cameraButton.textContent = 'Stop Camera';
+                };
+
+            } catch (err) {
+                console.error("Error accessing camera: ", err);
+                let message = 'Could not access the camera. Please ensure you have granted permission.';
+                if (err.name === 'NotAllowedError') {
+                    message = 'Camera access was denied. Please grant permission in your browser settings and try again.';
+                } else if (err.name === 'OverconstrainedError') {
+                    message = 'Your camera does not support the required resolution (625x795). Please try on a different device.';
+                } else if (err.name === 'NotFoundError') {
+                    message = 'No camera was found. Please ensure a camera is connected.';
+                }
+                showError(message);
+                placeholder.classList.remove('d-none');
+            }
+        });
+
+        // --- Capture Image on Video Click ---
+        video.addEventListener('click', () => {
+            arTxtItems = [];
+
+            if (!stream || !stream.active) {
+                return; // Do nothing if camera isn't running
+            }
+
+            // Match canvas dimensions to the video's actual dimensions
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+
+            // Draw the current video frame onto the canvas
+            canvasCtx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Show the canvas and hide the video
+            canvas.classList.remove('d-none');
+            video.classList.add('d-none');
+
+            // Stop the camera
+            stopCamera();
+
+            //to do crop.............
+            setTimeout(() => {
+                try {
+                    // Read the image from the input canvas into a cv.Mat object
+                    let src = cv.imread(canvas); 
+                        
+                    let gray = new cv.Mat();
+                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                    
+                    let blurred = new cv.Mat();
+                    cv.GaussianBlur(gray, blurred, new cv.Size(5, 5), 0, 0, cv.BORDER_DEFAULT);
+
+                    let thresh = new cv.Mat();
+                    cv.adaptiveThreshold(blurred, thresh, 255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV, 11, 2);
+
+                    let contours = new cv.MatVector();
+                    let hierarchy = new cv.Mat();
+                    cv.findContours(thresh, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+                    let markers = [];
+                    for (let i = 0; i < contours.size(); ++i) {
+                        let cnt = contours.get(i);
+                        let peri = cv.arcLength(cnt, true);
+                        let approx = new cv.Mat();
+                        cv.approxPolyDP(cnt, approx, 0.04 * peri, true);  
+
+                        if (approx.rows === 4) {
+                            let rect = cv.boundingRect(approx); 
+                            //if(rect.x < 20/100*src.cols && rect.y < 20/100*src.rows){alert([rect.width , rect.height])}
+                            if ( 
+                                  /*(
+                                  (rect.x < 20/100*src.cols && rect.y < 20/100*src.rows) ||
+                                  (Math.abs(rect.x-src.cols) < 20/100*src.cols && rect.y < 20/100*src.rows) ||
+                                  (rect.x < 20/100*src.cols && Math.abs(rect.y-src.rows) < 20/100*src.rows) ||
+                                  (Math.abs(rect.x-src.cols) < 20/100*src.cols && Math.abs(rect.y-src.rows) < 20/100*src.rows) 
+                                  )&&*/
+
+                                  (rect.width > rect_width && rect.height > rect_height) &&
+                                  
+                                  Math.abs(rect.width - rect.height) <= rect_width_height_diff && rect.width < src.cols / 4 && rect.height < src.rows / 4) {
+                                // Store both the bounding box and the exact corner points
+                                markers.push({ rect: rect, corners: getCornerPoints(approx) });
+                            }
+                        }
+                        approx.delete();
+                        cnt.delete();
+                    }
+
+                    // Draw all detected potential markers for debugging
+                    let displayMat = src.clone();
+                    markers.forEach(m => {
+                        let color = new cv.Scalar(255, 0, 0, 255); // Blue
+                        // **FIX:** Use Point objects for drawing rectangles
+                        let point1 = new cv.Point(m.rect.x, m.rect.y);
+                        let point2 = new cv.Point(m.rect.x + m.rect.width, m.rect.y + m.rect.height);
+                        cv.rectangle(displayMat, point1, point2, color, 2);
+                    });
+
+                    if (markers.length < 4) {
+                        alert( `Error: Found only ${markers.length} potential markers. Need 4.` );
+                        cv.imshow('canvas', displayMat); // Show what was detected
+                        cleanup(src, gray, blurred, thresh, contours, hierarchy, displayMat);
+                        return;
+                    }
+
+                     // Find the four corner markers using a more robust sorting method
+                    const cornerMarkers = findCornerMarkers(markers);
+                    
+                    if (!cornerMarkers.topLeft || !cornerMarkers.topRight || !cornerMarkers.bottomLeft || !cornerMarkers.bottomRight) {
+                         alert( 'Error: Could not reliably identify all four corner markers.');
+                         cv.imshow('canvas', displayMat);
+                         cleanup(src, gray, blurred, thresh, contours, hierarchy, displayMat);
+                         return;
+                    }
+                    
+                     // Highlight the identified corner markers in green
+                    Object.values(cornerMarkers).forEach(m => {
+                        let color = new cv.Scalar(0, 255, 0, 255); // Green
+                        // **FIX:** Use Point objects for drawing rectangles
+                        let point1 = new cv.Point(m.rect.x, m.rect.y);
+                        let point2 = new cv.Point(m.rect.x + m.rect.width, m.rect.y + m.rect.height);
+                        cv.rectangle(displayMat, point1, point2, color, 3);
+                    });
+                    cv.imshow('canvas', displayMat);
+
+                    // Get the outermost corner points for the perspective transform
+                    const srcCorners = [
+                        cornerMarkers.topLeft.corners.tl,
+                        cornerMarkers.topRight.corners.tr,
+                        cornerMarkers.bottomRight.corners.br,
+                        cornerMarkers.bottomLeft.corners.bl
+                    ].flatMap(p => [p.x, p.y]);
+
+                    // Calculate destination dimensions
+                    let widthA = Math.hypot(srcCorners[2] - srcCorners[0], srcCorners[3] - srcCorners[1]); // top width
+                    let widthB = Math.hypot(srcCorners[6] - srcCorners[4], srcCorners[7] - srcCorners[5]); // bottom width
+                    const maxWidth = Math.max(Math.floor(widthA), Math.floor(widthB));
+
+                    let heightA = Math.hypot(srcCorners[6] - srcCorners[0], srcCorners[7] - srcCorners[1]); // left height
+                    let heightB = Math.hypot(srcCorners[4] - srcCorners[2], srcCorners[5] - srcCorners[3]); // right height
+                    const maxHeight = Math.max(Math.floor(heightA), Math.floor(heightB));
+                    
+                    const dstCorners = [0, 0, maxWidth - 1, 0, maxWidth - 1, maxHeight - 1, 0, maxHeight - 1];
+
+                    let srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, srcCorners);
+                    let dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, dstCorners);
+                    let M = cv.getPerspectiveTransform(srcTri, dstTri);
+                    let dsize = new cv.Size(maxWidth, maxHeight);
+                    let warped = new cv.Mat();
+                    cv.warpPerspective(src, warped, M, dsize, cv.INTER_LINEAR, cv.BORDER_CONSTANT, new cv.Scalar());
+
+                    cv.imshow('canvas', warped);
+                    
+                    status.textContent = 'Cropping complete!';
+                    
+                    // Clean up OpenCV Mats to free memory
+                    cleanup(/*src,*/ gray, blurred, thresh, contours, hierarchy, displayMat, srcTri, dstTri, M /*, warped*/);/**/
+
+                    //todo cal the table
+                    // 3. Apply a threshold to ensure it's purely black and white
+                // This helps in getting a clear distinction between black and white cells
+                let matBinary = new cv.Mat();
+                cv.threshold(warped, matBinary, 127, 255, cv.THRESH_BINARY);
+
+                const imgWidth = matBinary.cols;
+                const imgHeight = matBinary.rows;
+                const cellWidth = imgWidth / COLS;
+                const cellHeight = imgHeight / ROWS;
+
+                let displayMat2 = warped.clone();let color2 = new cv.Scalar(255, 0, 0, 255); // Blue
+
+                let arCellColor = [];                
+                let txtTmp = "";
+
+                // 4. Loop through each cell of the grid
+                let n4Test = 0;
+                let sumColor4Test = 0;
+                let boolShowColorVal = document.querySelector('.form-check-input').checked;
+                let centerX, radiusX, colorX, thicknessX;
+                for (let i = 0; i < ROWS; i++) {
+                  arCellColor[i] = [];
+                  txtTmp = "";
+
+                    for (let j = 0; j < COLS; j++) {
+                        // Define the region of interest (ROI) for the current cell
+                        const rect = new cv.Rect(
+                          j * cellWidth + valShiftRect,
+                          i * cellHeight + valShiftRect,
+                          cellWidth - valShiftRect,
+                          cellHeight - valShiftRect
+                          );
+                        let cellMat =  matBinary.roi(rect); //warped.roi(rect);
+
+                        // **FIX:** Use Point objects for drawing rectangles
+                        let point12 = new cv.Point((j) * cellWidth , (i) * cellHeight );
+                        let point22 = new cv.Point(cellWidth , cellHeight );
+                        cv.rectangle(displayMat2, point12, point22, color2, 1);
+                        
+                        /*let centerX = new cv.Point(j * cellWidth+cellWidth/2, i * cellHeight+cellHeight/2); // Center at (100, 150)
+                        let radiusX = 8; // Radius of 50 pixels
+                        let colorX = new cv.Scalar(0, 255, 0, 255); // Green color (BGR format with alpha)
+                        let thicknessX = 1; // 2 pixels thick outline
+
+                        cv.circle(displayMat2, centerX, radiusX, colorX, thicknessX);/**/
+
+                        // 5. Calculate the mean color value of the cell
+                        // For a binary image, a value near 0 is black, and near 255 is white.
+                        let meanColor = cv.mean(cellMat);//mean
+
+                        arCellColor[i].push(meanColor[0].toFixed(0));
+
+                        if(j > 1 && j < COLS-2 && i > 0 && i < ROWS-1){ //if(j > 1 && j < 12 && i > 1 && i < 19){
+                          if( meanColor[0] < valTestBlackWhite ){
+                            txtTmp += "" + (j-2);
+
+                            centerX = new cv.Point(j * cellWidth+cellWidth/2, i * cellHeight+cellHeight/2);
+                            radiusX = Math.min( cellWidth-2*valShiftRect, cellHeight-2*valShiftRect )/2; //8;
+                            colorX = new cv.Scalar(0, 255, 0, 255);
+                            thicknessX = 1;
+                            cv.circle(displayMat2, centerX, radiusX, colorX, thicknessX);
+                          }
+                        }
+
+                        if( i > 0 && i < ROWS-1 && (j == 0 || j == COLS-1 ) ){ //if( i > 1 && i < 19 && (j == 0 || j == 13 ) ){
+                          n4Test++;
+                          sumColor4Test += meanColor[0];
+                        }
+                        if( j > 0 && j < COLS-1 && (i == 0 || i == ROWS-1 ) ){ //if( j > 1 && j < 12 && (i == 0 || i == 20 ) ){
+                          n4Test++;
+                          sumColor4Test += meanColor[0];
+                        }
+                        
+                        // Clean up the cell matrix to prevent memory leaks
+                        cellMat.delete();
+                    }
+
+                    arTxtItems.push( txtTmp==""?"-":("'"+txtTmp) );
+                }
+                
+                cv.imshow('canvas', displayMat2);
+
+                // 8. Clean up main cv.Mat objects
+                displayMat2.delete();
+                warped.delete();
+                matBinary.delete();
+                cleanup(src);
+
+                let txtColorShowww = "";
+                if(boolShowColorVal){
+                  arCellColor.forEach((cc,kk)=>{
+                    txtColorShowww += (kk-3)+":["+cc.join(",")+"]<br>";
+                  });
+                };
+
+                errorMessage.innerHTML = arTxtItems.join(",")+"<br>"+ (sumColor4Test/n4Test).toFixed(0)
+                +"<br>"+txtColorShowww;
+                errorMessage.classList.remove("d-none");
+                    
+                } catch (err) {
+                    alert(err);
+                } finally {
+                }
+            }, 500);
+
+        });
+
+        // Helper to extract corner points from an approximation Mat
+        function getCornerPoints(approx) {
+            const points = [];
+            for (let i = 0; i < approx.rows; i++) {
+                points.push({ x: approx.data32S[i * 2], y: approx.data32S[i * 2 + 1] });
+            }
+            // Sort points by y, then x to find tl, tr, bl, br relative to the shape itself
+            points.sort((a, b) => a.y - b.y);
+            const top = points.slice(0, 2).sort((a, b) => a.x - b.x);
+            const bottom = points.slice(2, 4).sort((a, b) => a.x - b.x);
+            return { tl: top[0], tr: top[1], bl: bottom[0], br: bottom[1] };
+        }
+
+        // Helper function to identify which marker belongs to which corner via sorting
+        function findCornerMarkers(markers) {
+            // Sort by y-coordinate to find top and bottom rows
+            markers.sort((a, b) => a.rect.y - b.rect.y);
+            const topTwo = markers.slice(0, 2).sort((a, b) => a.rect.x - b.rect.x);
+            const bottomTwo = markers.slice(markers.length - 2, markers.length).sort((a, b) => a.rect.x - b.rect.x);
+
+            return {
+                topLeft: topTwo[0],
+                topRight: topTwo[1],
+                bottomLeft: bottomTwo[0],
+                bottomRight: bottomTwo[1]
+            };
+        }
+
+        // Helper function to clean up all allocated cv.Mat objects
+        function cleanup(...mats) {
+            mats.forEach(mat => {
+                if (mat instanceof cv.Mat && !mat.isDeleted()) {
+                    mat.delete();
+                }
+            });
+            //loader.classList.add('hidden');
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+          loadSettings();
+        });
+
+
+  </script>
+</body>
+
+</html>
