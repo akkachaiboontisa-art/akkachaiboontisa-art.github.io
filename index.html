@@ -14,7 +14,6 @@
     #media-container {
       width: 100%;
       max-width: 600px;
-      /* Removed min-height so it adapts to the camera's natural aspect ratio */
       background-color: #000; /* Black background looks better for camera bounds */
       border-radius: 12px;
       overflow: hidden;
@@ -29,7 +28,6 @@
       width: 100%;
       height: auto;
       display: block;
-      /* Removed object-fit: cover so the image/video is not cropped into a square */
     }
     .overlay-text {
       position: absolute;
@@ -107,7 +105,7 @@
     // Clicking the video triggers the photo capture
     video.addEventListener('click', capturePicture);
 
-    // Clicking save triggers the GAS API
+    // Clicking save triggers the POST API
     saveBtn.addEventListener('click', saveToDrive);
 
 
@@ -195,27 +193,32 @@
       saveSpinner.classList.remove('d-none');
       hideAlert();
 
-      // 3. Call Google Apps Script backend
-      // We check if google.script.run exists so it doesn't crash if previewed outside GAS
-      if (typeof google !== 'undefined' && google.script) {
-        google.script.run
-          .withSuccessHandler(function(fileUrl) {
-            showAlert('Success! Picture saved to Drive.', 'success');
-            resetSaveButton();
-            // Optional: You could add a link to the fileUrl here
-          })
-          .withFailureHandler(function(error) {
-            showAlert('Failed to save picture: ' + error.message, 'danger');
-            resetSaveButton();
-          })
-          .saveImageToDrive(base64Data, filename);
-      } else {
-        // Mock behavior for local testing / outside of GAS
-        setTimeout(() => {
-          showAlert('Mock Success: Image would be saved to Drive via google.script.run in a real Apps Script environment.', 'success');
-          resetSaveButton();
-        }, 1500);
-      }
+      // IMPORTANT: Replace this URL with your actual Google Apps Script Web App Deployment URL
+      const webAppUrl = 'https://script.google.com/macros/s/AKfycbxo61jok3jjZnkBDf5HNk9ZtlaTPSHaQnETQf7rGTzR5jtXGEKvgcNSwGd-owTeynEG/exec'; 
+
+      // 3. Format data exactly like an HTML form submission
+      const formData = new URLSearchParams();
+      formData.append('base64Data', base64Data);
+      formData.append('filename', filename);
+
+      // 4. Send the POST Request
+      fetch(webAppUrl, {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.text())
+      .then(text => {
+        if (text.startsWith("Success")) {
+          showAlert('Success! Picture saved to Drive.', 'success');
+        } else {
+          showAlert('Failed to save picture: ' + text, 'danger');
+        }
+        resetSaveButton();
+      })
+      .catch(error => {
+        showAlert('Request Failed. Did you replace the Web App URL? Error: ' + error.message, 'danger');
+        resetSaveButton();
+      });
     }
 
     // --- Utility Functions ---
